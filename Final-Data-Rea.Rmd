@@ -161,12 +161,8 @@ x <- gsub( "-", "", x )
 x <- as.numeric( x )
 
 # remember to add the variable back to the census dataset
-d$tractid2 <- x 
+d$tractid2 <- x
 
-col <- merge( col, d, by.x="GEOID", by.y="tractid", all.x=T )
-```
-
-```{r}
 d <- select( d, tractid, 
              mhmval00, mhmval12, 
              hinc00, 
@@ -224,9 +220,10 @@ mhv.growth <- 100 * ( mhv.change / mhv.00 )
 d$mhv.00 <- mhv.00
 d$mhv.10 <- mhv.10
 d$mhv.change <- mhv.change
-d$mhv.growth <- mhv.growth
-head(d)
+
+col_dorling <- merge( col_dorling, d, by.x="GEOID", by.y="tractid", all.x=T )
 ```
+
 
 ```{r}
 # data frame and polygon ID standardization in case a tract was dropped and IDs don't match
