@@ -1,0 +1,257 @@
+---
+title: "Final Project Data"
+author: "Nicholas Rea"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    theme: readable
+    highlight: tango
+    
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set( echo = TRUE, message=F, warning=F, fig.width=10 )
+```
+
+```{r, include = FALSE}
+library( tidycensus )
+library( geojsonio )
+library( sp )
+library( sf )
+library( mclust )
+library( dplyr )
+library( tmap)
+library( ggplot2 )
+library( ggthemes )
+library( pander )
+library( cartogram )
+library( maptools )
+library( stringr )
+library( fun )
+```
+
+
+```{r}
+crosswalk <- read.csv( "https://raw.githubusercontent.com/DS4PS/cpp-529-master/master/data/cbsatocountycrosswalk.csv",  stringsAsFactors=F, colClasses="character" )
+
+# search for citie names by strings, use the ^ anchor for "begins with" 
+
+grep( "^COLUMBUS", crosswalk$msaname, value=TRUE ) 
+```
+
+```{r}
+these.msp <- crosswalk$msaname == "COLUMBUS, OH"
+these.fips <- crosswalk$fipscounty[ these.msp ]
+these.fips <- na.omit( these.fips )
+
+head( these.fips ) %>% pander()
+```
+
+```{r}
+state.fips <- substr( these.fips, 1, 2 )
+county.fips <- substr( these.fips, 3, 5 )
+
+cbind( these.fips, state.fips, county.fips ) %>% pander()
+```
+
+```{r, echo=T, results='hide'}
+col.pop <-
+get_acs( geography = "tract", variables = "B01003_001",
+         state = "39", county = county.fips[state.fips=="39"], geometry = TRUE ) %>% 
+         select( GEOID, estimate ) %>%
+         rename( POP=estimate )
+```
+
+```{r}
+URL <- "https://github.com/DS4PS/cpp-529-master/raw/master/data/ltdb_std_2010_sample.rds"
+census.dat <- readRDS(gzcon(url( URL )))
+
+# can merge an sf object and data.frame
+col <- merge( col.pop, census.dat, by.x="GEOID", by.y="tractid" )
+
+# make sure there are no empty polygons
+col <- col[ ! st_is_empty( col ) , ]
+
+# convert sf map object to an sp version
+col.sp <- as_Spatial( col )
+
+class( col.sp )
+
+plot( col.sp )
+
+```
+
+```{r}
+# project map and remove empty tracts
+col.sp <- spTransform( col.sp, CRS("+init=epsg:3395"))
+col.sp <- col.sp[ col.sp$POP != 0 & (! is.na( col.sp$POP )) , ]
+
+# convert census tract polygons to dorling cartogram
+# no idea why k=0.03 works, but it does - default is k=5
+col.sp$pop.w <- col.sp$POP / 9000 # max(col.sp$POP)   # standardizes it to max of 1.5
+col_dorling <- cartogram_dorling( x=col.sp, weight="pop.w", k=0.05 )
+plot( col_dorling )
+```
+
+```{r}
+# user-defined bounding box to move closer to subjects 
+bb <- st_bbox( c( xmin =  -9271485, xmax = -9194456, 
+                  ymax = 4873764, ymin = 4807687 ), 
+               crs = st_crs("+init=epsg:3395"))
+
+tm_shape( col_dorling, bbox=bb ) + 
+  tm_polygons( col="hinc12", n=10, style="quantile", palette="Spectral" ) +
+  tm_layout( "Dorling Cartogram", title.position=c("right","top") )
+```
+
+```{r}
+keep.these <- c("pnhwht12", "pnhblk12", "phisp12", "pntv12", "pfb12", "polang12", 
+"phs12", "pcol12", "punemp12", "pflabf12", "pprof12", "pmanuf12", 
+"pvet12", "psemp12", "hinc12", "incpc12", "ppov12", "pown12", 
+"pvac12", "pmulti12", "mrent12", "mhmval12", "p30old12", "p10yrs12", 
+"p18und12", "p60up12", "p75up12", "pmar12", "pwds12", "pfhh12")
+
+dat1 <- col_dorling@data
+dat2 <- select( dat1, keep.these )
+dat3 <- apply( dat2, 2, scale )
+head( dat3[,1:6] ) %>% pander()
+```
+
+```{r}
+set.seed( 1234 )
+fit <- Mclust( dat3 )
+col_dorling$cluster <- as.factor( fit$classification )
+summary( fit )
+```
+
+```{r}
+URL1 <- "https://github.com/DS4PS/cpp-529-fall-2020/raw/main/LABS/data/rodeo/LTDB-2000.rds"
+d1 <- readRDS( gzcon( url( URL1 ) ) )
+
+URL2 <- "https://github.com/DS4PS/cpp-529-fall-2020/raw/main/LABS/data/rodeo/LTDB-2010.rds"
+d2 <- readRDS( gzcon( url( URL2 ) ) )
+
+URLmd <- "https://github.com/DS4PS/cpp-529-fall-2020/raw/main/LABS/data/rodeo/LTDB-META-DATA.rds"
+md <- readRDS( gzcon( url( URLmd ) ) )
+
+d1 <- select( d1, - year )
+d2 <- select( d2, - year )
+
+d <- merge( d1, d2, by="tractid" )
+d <- merge( d, md, by="tractid" )
+
+# STANDARDIZE GEO IDs
+
+# note the current geoid format for the LTDB census data: 
+# FIPS-STATE-COUNTY-TRACT:  fips-01-001-020100  
+
+x <- d$tractid 
+# head( x )
+# [1] "fips-01-001-020100" "fips-01-001-020200" "fips-01-001-020300"
+# [4] "fips-01-001-020400" "fips-01-001-020500" "fips-01-001-020600"
+
+# remove non-numeric strings 
+x <- gsub( "fips", "", x )
+x <- gsub( "-", "", x )
+# head( x )
+# [1] "01001020100" "01001020200" "01001020300" "01001020400" "01001020500"
+# [6] "01001020600"
+
+# drop leading zeros 
+x <- as.numeric( x )
+
+# remember to add the variable back to the census dataset
+d$tractid2 <- x 
+
+col <- merge( col, d, by.x="GEOID", by.y="tractid", all.x=T )
+```
+
+```{r}
+d <- select( d, tractid, 
+             mhmval00, mhmval12, 
+             hinc00, 
+             hu00, vac00, own00, rent00, h30old00,
+             empclf00, clf00, unemp00, prof00,  
+             dpov00, npov00,
+             ag25up00, hs00, col00, 
+             pop00.x, nhwht00, nhblk00, hisp00, asian00,
+             cbsa, cbsaname )
+
+ 
+d <- 
+  d %>%
+  mutate( # percent white in 2000
+          p.white = 100 * nhwht00 / pop00.x,
+          # percent black in 2000
+          p.black = 100 * nhblk00 / pop00.x,
+          # percent hispanic in 2000
+          p.hisp = 100 * hisp00 / pop00.x, 
+          # percent asian in 2000
+          p.asian = 100 * asian00 / pop00.x,
+          # percent high school grads by age 25 in 2000 
+          p.hs = 100 * (hs00+col00) / ag25up00,
+          # percent pop with college degree in 2000
+          p.col = 100 * col00 / ag25up00,
+          # percent employed in professional fields in 2000
+          p.prof = 100 * prof00 / empclf00,
+          # percent unemployment  in 2000
+          p.unemp = 100 * unemp00 / clf00,
+          # percent of housing lots in tract that are vacant in 2000
+          p.vacant = 100 * vac00 / hu00,
+          # dollar change in median home value 2000 to 2010 
+          pov.rate = 100 * npov00 / dpov00 )
+
+
+# adjust 2000 home values for inflation 
+mhv.00 <- d$mhmval00 * 1.28855  
+mhv.10 <- d$mhmval12
+
+# change in MHV in dollars
+mhv.change <- mhv.10 - mhv.00
+
+
+# drop low 2000 median home values
+# to avoid unrealistic growth rates.
+#
+# tracts with homes that cost less than
+# $1,000 are outliers
+mhv.00[ mhv.00 < 1000 ] <- NA
+
+# change in MHV in percent
+mhv.growth <- 100 * ( mhv.change / mhv.00 )
+
+
+d$mhv.00 <- mhv.00
+d$mhv.10 <- mhv.10
+d$mhv.change <- mhv.change
+d$mhv.growth <- mhv.growth
+head(d)
+```
+
+```{r}
+# data frame and polygon ID standardization in case a tract was dropped and IDs don't match
+row.ids <- sapply( slot( col_dorling, "polygons" ), function(x) slot( x, "ID" ) )
+row.names( col_dorling ) <- row.ids
+
+# project to standard lat-lon coordinate system 
+col_dorling <- spTransform( col_dorling, CRS("+proj=longlat +datum=WGS84") )
+
+# write to file 
+geojson_write( col_dorling, file="columbus_dorling.geojson", geometry="polygon" )
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
