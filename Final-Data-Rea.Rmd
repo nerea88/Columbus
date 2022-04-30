@@ -133,7 +133,10 @@ d2 <- readRDS( gzcon( url( URL2 ) ) )
 
 URLmd <- "https://github.com/DS4PS/cpp-529-fall-2020/raw/main/LABS/data/rodeo/LTDB-META-DATA.rds"
 md <- readRDS( gzcon( url( URLmd ) ) )
+```
 
+
+```{r}
 d1 <- select( d1, - year )
 d2 <- select( d2, - year )
 
@@ -221,7 +224,7 @@ d$mhv.00 <- mhv.00
 d$mhv.10 <- mhv.10
 d$mhv.change <- mhv.change
 
-col_dorling <- merge( col_dorling, d, by.x="GEOID", by.y="tractid", all.x=T )
+col_dorling@data <- merge( col_dorling@data, d, by.x="GEOID", by.y="tractid", all.x=T )
 ```
 
 
