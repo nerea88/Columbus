@@ -146,57 +146,16 @@ d <- merge( d, md, by="tractid" )
 # note the current geoid format for the LTDB census data: 
 # FIPS-STATE-COUNTY-TRACT:  fips-01-001-020100  
 
-x <- d$tractid 
-# head( x )
-# [1] "fips-01-001-020100" "fips-01-001-020200" "fips-01-001-020300"
-# [4] "fips-01-001-020400" "fips-01-001-020500" "fips-01-001-020600"
 
 # remove non-numeric strings 
-x <- gsub( "fips", "", x )
-x <- gsub( "-", "", x )
+tractid2 <- gsub( "fips", "", d$tractid)
+tractid2 <- gsub( "-", "", tractid2 )
 # head( x )
 # [1] "01001020100" "01001020200" "01001020300" "01001020400" "01001020500"
 # [6] "01001020600"
 
 # drop leading zeros 
-x <- as.numeric( x )
-
-# remember to add the variable back to the census dataset
-d$tractid2 <- x
-
-d <- select( d, tractid, 
-             mhmval00, mhmval12, 
-             hinc00, 
-             hu00, vac00, own00, rent00, h30old00,
-             empclf00, clf00, unemp00, prof00,  
-             dpov00, npov00,
-             ag25up00, hs00, col00, 
-             pop00.x, nhwht00, nhblk00, hisp00, asian00,
-             cbsa, cbsaname )
-
- 
-d <- 
-  d %>%
-  mutate( # percent white in 2000
-          p.white = 100 * nhwht00 / pop00.x,
-          # percent black in 2000
-          p.black = 100 * nhblk00 / pop00.x,
-          # percent hispanic in 2000
-          p.hisp = 100 * hisp00 / pop00.x, 
-          # percent asian in 2000
-          p.asian = 100 * asian00 / pop00.x,
-          # percent high school grads by age 25 in 2000 
-          p.hs = 100 * (hs00+col00) / ag25up00,
-          # percent pop with college degree in 2000
-          p.col = 100 * col00 / ag25up00,
-          # percent employed in professional fields in 2000
-          p.prof = 100 * prof00 / empclf00,
-          # percent unemployment  in 2000
-          p.unemp = 100 * unemp00 / clf00,
-          # percent of housing lots in tract that are vacant in 2000
-          p.vacant = 100 * vac00 / hu00,
-          # dollar change in median home value 2000 to 2010 
-          pov.rate = 100 * npov00 / dpov00 )
+d$tractid2 <- as.numeric( tractid2 )
 
 
 # adjust 2000 home values for inflation 
@@ -223,7 +182,8 @@ d$mhv.10 <- mhv.10
 d$mhv.change <- mhv.change
 d$mhv.growth <- mhv.growth
 
-col <- merge( col_dorling, d, by.x="GEOID", by.y="tractid", all.x=T )
+
+col <- merge( col_dorling, d, by.x="GEOID", by.y="tractid2", all.x=T )
 ```
 
 
