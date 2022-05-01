@@ -150,9 +150,6 @@ d <- merge( d, md, by="tractid" )
 # remove non-numeric strings 
 tractid2 <- gsub( "fips", "", d$tractid)
 tractid2 <- gsub( "-", "", tractid2 )
-# head( x )
-# [1] "01001020100" "01001020200" "01001020300" "01001020400" "01001020500"
-# [6] "01001020600"
 
 # drop leading zeros 
 d$tractid2 <- as.numeric( tractid2 )
@@ -182,9 +179,21 @@ d$mhv.10 <- mhv.10
 d$mhv.change <- mhv.change
 d$mhv.growth <- mhv.growth
 
+na.omit(d)
 
 col <- merge( col_dorling, d, by.x="GEOID", by.y="tractid2", all.x=T )
 ```
+
+
+
+```{r}
+class(col)
+```
+
+```{r}
+names(col) %>% sort()
+```
+
 
 
 ```{r}
